@@ -1,68 +1,88 @@
-FROM debian:testing-20241223-slim
+FROM golang:1.24 AS builder
 
-WORKDIR /agent
+# TODO: embed software version in executable
 
-RUN dpkg --add-architecture amd64 && dpkg --add-architecture arm64
+ARG TARGETARCH
 
+ENV GOARCH=$TARGETARCH
+WORKDIR /opt/app-root
+
+RUN apt-get update
+RUN apt-get install -qy ca-certificates
+
+
+
+
+
+
+# Install dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common \
+    curl \
+    gnupg \
+    lsb-release \
+    musl-tools \
+    protobuf-compiler \
+    cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add LLVM repository
+RUN curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-17 main" > /etc/apt/sources.list.d/llvm.list
+
+# Install Clang 16
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    clang-17 \
+    libc++-17-dev \
+    libc++abi-17-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set Clang 16 as the default compiler
+RUN update-alternatives --install /usr/bin/clang clang /usr/bin/clang-17 100 \
+    && update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-17 100
+
+# Verify installation
+RUN clang --version
 # cross_debian_arch: amd64 or arm64
 # cross_pkg_arch: x86-64 or aarch64
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    wget gnupg ca-certificates lsb-release wget software-properties-common  && \
+    # Add LLVM official repo keys and repository
+
+    apt-get install -y --no-install-recommends
+
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    wget gnupg ca-certificates && \
+    # Add LLVM official repo keys and repository
+    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - && \
+    echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-17 main" >> /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+    make gcc libc-dev clang-17 llvm-17 elfutils \
+    git && \
+    rm -rf /var/lib/apt/lists/*
+
 RUN cross_debian_arch=$(uname -m | sed -e 's/aarch64/amd64/'  -e 's/x86_64/arm64/'); \
-    cross_pkg_arch=$(uname -m | sed -e 's/aarch64/x86-64/' -e 's/x86_64/aarch64/'); \
-    apt-get update -y && \
-    apt-get dist-upgrade -y && \
-    apt-get install -y curl wget make git cmake clang-17 unzip libc6-dev g++ gcc pkgconf \
-        gcc-${cross_pkg_arch}-linux-gnu libc6-${cross_debian_arch}-cross \
-        musl-dev:amd64 musl-dev:arm64 && \
-    apt-get clean autoclean && \
-    apt-get autoremove --yes
+    cross_pkg_arch=$(uname -m | sed -e 's/aarch64/x86-64/' -e 's/x86_64/aarch64/');
 
-COPY go.mod /tmp/go.mod
-# Extract Go version from go.mod
-RUN GO_VERSION=$(grep -oPm1 '^go \K([[:digit:].]+)' /tmp/go.mod) && \
-    GOARCH=$(uname -m) && if [ "$GOARCH" = "x86_64" ]; then GOARCH=amd64; elif [ "$GOARCH" = "aarch64" ]; then GOARCH=arm64; fi && \
-    wget -qO- https://golang.org/dl/go${GO_VERSION}.linux-${GOARCH}.tar.gz | tar -C /usr/local -xz
+RUN apt-get update
+RUN apt-get install -y make unzip
+RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Set Go environment variables
-ENV GOPATH="/agent/go"
-ENV GOCACHE="/agent/.cache"
-ENV PATH="/usr/local/go/bin:$PATH"
+COPY go.mod go.mod
+RUN go mod download
+RUN go mod tidy
 
-# gRPC dependencies
-RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.31.0
-RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0
+COPY . .
+RUN make
+FROM golang:1.23 AS runner
 
-RUN                                                                                \
-  PB_URL="https://github.com/protocolbuffers/protobuf/releases/download/v24.4/";   \
-  PB_FILE="protoc-24.4-linux-x86_64.zip";                                      \
-  INSTALL_DIR="/usr/local";                                                        \
-                                                                                   \
-  wget -nv "$PB_URL/$PB_FILE"                                                       \
-    && unzip "$PB_FILE" -d "$INSTALL_DIR" 'bin/*' 'include/*'                      \
-    && chmod +xr "$INSTALL_DIR/bin/protoc"                                         \
-    && find "$INSTALL_DIR/include" -type d -exec chmod +x {} \;                    \
-    && find "$INSTALL_DIR/include" -type f -exec chmod +r {} \;                    \
-    && rm "$PB_FILE"
+WORKDIR /app
+COPY --from=builder /opt/app-root/ebpf-profiler /app/ebpf-profiler
 
-# Append to /etc/profile for login shells
-RUN echo 'export PATH="/usr/local/go/bin:$PATH"' >> /etc/profile
-
-# Create rust related directories in /usr/local
-RUN mkdir -p /usr/local/cargo /usr/local/rustup
-
-# Set environment variable before rustup installation
-ENV CARGO_HOME=/usr/local/cargo
-ENV RUSTUP_HOME=/usr/local/rustup
-
-# Install rustup and cargo
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.77
-
-# Add rust related environment variables
-RUN echo 'export PATH="/usr/local/cargo/bin:$PATH"' >> /etc/profile     \
-    && echo 'export CARGO_HOME="/usr/local/cargo"' >> /etc/profile      \
-    && echo 'export RUSTUP_HOME="/usr/local/rustup"' >> /etc/profile
-
-# Set mode bits
-RUN chmod -R a+w /usr/local/rustup      \
-    && chmod -R a+w /usr/local/cargo
-
-ENTRYPOINT ["/bin/bash", "-l", "-c"]
+ENTRYPOINT [ "./ebpf-profiler" ]

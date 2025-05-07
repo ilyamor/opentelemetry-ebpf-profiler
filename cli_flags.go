@@ -68,6 +68,12 @@ var (
 		"Valid values are in the range [1..%d], and 0 to disable off-cpu profiling."+
 		"Default is %d.",
 		support.OffCPUThresholdMax, defaultOffCPUThreshold)
+	k8sWatcherHostHelp = "The host to connect to the Kubernetes watcher." +
+		"default is k8s-watcher.profiling:8080"
+	redisAddrHelp = "The address of the Redis server for watching k8s events" +
+		"default is redis.profiling"
+	redisPortHelm = "The port of the Redis server" +
+		"default is 6379"
 	envVarsHelp = "Comma separated list of environment variables that will be reported with the" +
 		"captured profiling samples."
 )
@@ -126,6 +132,9 @@ func parseArgs() (*controller.Config, error) {
 	fs.UintVar(&args.OffCPUThreshold, "off-cpu-threshold",
 		defaultOffCPUThreshold, offCPUThresholdHelp)
 
+	fs.StringVar(&args.K8sWatcherHost, "k8s-watcher-host", "", k8sWatcherHostHelp)
+	fs.StringVar(&args.RedisHost, "redis", "", redisAddrHelp)
+	fs.IntVar(&args.RedisPort, "redis-port", 6379, redisPortHelm)
 	fs.StringVar(&args.IncludeEnvVars, "env-vars", defaultEnvVarsValue, envVarsHelp)
 
 	fs.Usage = func() {

@@ -32,6 +32,9 @@ type Config struct {
 	Tracers                string
 	VerboseMode            bool
 	Version                bool
+	K8sWatcherHost         string
+	RedisHost              string
+	RedisPort              int
 	OffCPUThreshold        uint
 
 	Reporter reporter.Reporter
