@@ -6,6 +6,7 @@ package reporter // import "go.opentelemetry.io/ebpf-profiler/reporter"
 import (
 	"context"
 	"crypto/tls"
+	"go.opentelemetry.io/ebpf-profiler/containermetadata"
 	"maps"
 	"strconv"
 	"time"
@@ -83,6 +84,12 @@ func NewOTLP(cfg *Config) (*OTLPReporter, error) {
 	if err != nil {
 		return nil, err
 	}
+	containerMetadataConfig := containermetadata.Config{
+		K8SWatcherHost: cfg.K8sWatcherURL,
+		RedisHost:      cfg.RedisHost,
+		RedisPort:      cfg.RedisPort,
+	}
+	handler, err := containermetadata.GetHandler(context.Background(), containerMetadataConfig)
 
 	originsMap := make(map[libpf.Origin]samples.KeyToEventMapping, 2)
 	for _, origin := range []libpf.Origin{support.TraceOriginSampling,
@@ -102,7 +109,9 @@ func NewOTLP(cfg *Config) (*OTLPReporter, error) {
 			runLoop: &runLoop{
 				stopSignal: make(chan libpf.Void),
 			},
+			containermetadatahandler: handler,
 		},
+
 		kernelVersion:           cfg.KernelVersion,
 		hostName:                cfg.HostName,
 		ipAddress:               cfg.IPAddress,

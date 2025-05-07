@@ -61,4 +61,11 @@ type Config struct {
 	// GRPCDialOptions allows passing additional gRPC dial options when establishing
 	// the connection to the collector. These options are appended after the default options.
 	GRPCDialOptions []grpc.DialOption
+
+	K8sWatcherURL string
+	//k8s redis config
+	RedisHost string
+
+	//k8s redis port
+	RedisPort int
 }

@@ -221,6 +221,11 @@ func (p *Pdata) setProfile(
 
 		attrMgr.AppendOptionalString(sample.AttributeIndices(),
 			semconv.ServiceNameKey, traceKey.ApmServiceName)
+		attrMgr.AppendOptionalString(sample.AttributeIndices(),
+			semconv.K8SPodNameKey, traceKey.PodName)
+		attrMgr.AppendOptionalString(sample.AttributeIndices(),
+			semconv.K8SContainerNameKey, traceKey.ContainerName)
+
 		attrMgr.AppendInt(sample.AttributeIndices(),
 			semconv.ProcessPIDKey, traceKey.Pid)
 

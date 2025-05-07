@@ -49,7 +49,10 @@ type TraceAndMetaKey struct {
 
 	// ExtraMeta stores extra meta info that may have been produced by a
 	// `SampleAttrProducer` instance. May be nil.
-	ExtraMeta any
+	ExtraMeta     any
+	PodName       string
+	ContainerName string
+	ServiceName   string
 }
 
 // KeyToEventMapping supports temporary mapping traces to additional information.

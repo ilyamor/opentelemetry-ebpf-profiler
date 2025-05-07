@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.opentelemetry.io/ebpf-profiler/containermetadata"
 	"time"
 
 	lru "github.com/elastic/go-freelru"
@@ -42,6 +43,8 @@ type baseReporter struct {
 
 	// hostmetadata stores metadata that is sent out with every request.
 	hostmetadata *lru.SyncedLRU[string, string]
+
+	containermetadatahandler containermetadata.Handler
 }
 
 var errUnknownOrigin = errors.New("unknown trace origin")
@@ -108,15 +111,24 @@ func (b *baseReporter) ReportTraceEvent(trace *libpf.Trace, meta *samples.TraceE
 			meta.PID, err)
 	}
 
+	metadata, err := b.containermetadatahandler.GetContainerMetadata(meta.PID)
+	serviceName := metadata.ServiceName
+	if meta.APMServiceName != "" {
+		serviceName = meta.APMServiceName
+	}
+
 	key := samples.TraceAndMetaKey{
 		Hash:           trace.Hash,
 		Comm:           meta.Comm,
 		ProcessName:    meta.ProcessName,
 		ExecutablePath: meta.ExecutablePath,
-		ApmServiceName: meta.APMServiceName,
+		ApmServiceName: serviceName,
 		ContainerID:    containerID,
 		Pid:            int64(meta.PID),
 		ExtraMeta:      extraMeta,
+		PodName:        metadata.PodName,
+		ContainerName:  metadata.ContainerName,
+		ServiceName:    metadata.ServiceName,
 	}
 
 	traceEventsMap := b.traceEvents.WLock()

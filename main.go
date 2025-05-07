@@ -132,6 +132,9 @@ func mainWithExitCode() exitCode {
 		KernelVersion:       kernelVersion,
 		HostName:            hostname,
 		IPAddress:           sourceIP,
+		K8sWatcherURL:       cfg.K8sWatcherHost,
+		RedisHost:           cfg.RedisHost,
+		RedisPort:           cfg.RedisPort,
 	})
 	if err != nil {
 		log.Error(err)
