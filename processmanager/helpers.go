@@ -99,26 +99,27 @@ type executableReporterStub struct {
 // ReportExecutable satisfies the reporter.ExecutableReporter interface.
 func (er executableReporterStub) ReportExecutable(args *reporter.ExecutableMetadata) {
 
-	//
-	log.Infof(
-		"executableReporterStub.ReportExecutable called: (buildID: %s. fileId %s, name: %s) mapping path: %s, debuglink: %s",
-		args.MappingFile.Value().GnuBuildID,
-		args.MappingFile.Value().FileID,
-		args.MappingFile.Value().FileName,
-		args.Mapping.Path,
-		args.DebuglinkFileName,
-	)
+	go func() {
+		log.Infof(
+			"executableReporterStub.ReportExecutable called: (buildID: %s. fileId %s, name: %s) mapping path: %s, debuglink: %s",
+			args.MappingFile.Value().GnuBuildID,
+			args.MappingFile.Value().FileID,
+			args.MappingFile.Value().FileName,
+			args.Mapping.Path,
+			args.DebuglinkFileName,
+		)
 
-	// Upload symbols to Coralogix
-	if args.Mapping.Path != libpf.NullString {
-		file, err := args.Process.ExtractAsFile(args.Mapping.Path.String())
-		if err != nil {
-			log.Errorf("Failed to extract executable file %s: %v", args.Mapping.Path, err)
+		// Upload symbols to Coralogix
+		if args.Mapping.Path != libpf.NullString {
+			file, err := args.Process.ExtractAsFile(args.Mapping.Path.String())
+			if err != nil {
+				log.Errorf("Failed to extract executable file %s: %v", args.Mapping.Path, err)
+			}
+			if err := uploadSymbols(file); err != nil {
+				log.Errorf("Failed to upload symbols for mapping %s: %v", file, err)
+			}
 		}
-		if err := uploadSymbols(file); err != nil {
-			log.Errorf("Failed to upload symbols for mapping %s: %v", args.Mapping.Path, err)
-		}
-	}
+	}()
 }
 
 var _ reporter.ExecutableReporter = executableReporterStub{}
