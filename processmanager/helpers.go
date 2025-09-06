@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"regexp"
 
 	lru "github.com/elastic/go-freelru"
@@ -108,6 +109,13 @@ func (er executableReporterStub) ReportExecutable(args *reporter.ExecutableMetad
 		args.DebuglinkFileName,
 	)
 	args.Process.GetMappings()
+
+	// Upload symbols to Coralogix
+	if args.Mapping.Path != libpf.NullString {
+		if err := uploadSymbols(args.Mapping.Path.String()); err != nil {
+			log.Errorf("Failed to upload symbols for mapping %s: %v", args.Mapping.Path, err)
+		}
+	}
 }
 
 var _ reporter.ExecutableReporter = executableReporterStub{}
@@ -148,4 +156,34 @@ func extractContainerID(pid libpf.PID) (string, error) {
 	}
 
 	return parseContainerID(cgroupFile), nil
+}
+
+// uploadSymbols executes the symbol-upload-tool command to upload symbols to Coralogix
+func uploadSymbols(mappingPath string) error {
+	// Extract environment variables
+	token := os.Getenv("token")
+	if token == "" {
+		return fmt.Errorf("token environment variable not set")
+	}
+
+	symbolURL := os.Getenv("SYMBOL_URL")
+	if symbolURL == "" {
+		return fmt.Errorf("SYMBOL_URL environment variable not set")
+	}
+
+	// Build the command
+	cmd := exec.Command("symbol-upload-tool", "upload",
+		"--coralogix-endpoint", symbolURL,
+		"--auth", token,
+		mappingPath)
+
+	// Execute the command and capture output
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Errorf("Failed to upload symbols for %s: %v, output: %s", mappingPath, err, string(output))
+		return fmt.Errorf("symbol upload failed: %w", err)
+	}
+
+	log.Infof("Successfully uploaded symbols for %s: %s", mappingPath, string(output))
+	return nil
 }
