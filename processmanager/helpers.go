@@ -97,13 +97,17 @@ type executableReporterStub struct {
 
 // ReportExecutable satisfies the reporter.ExecutableReporter interface.
 func (er executableReporterStub) ReportExecutable(args *reporter.ExecutableMetadata) {
-	log.Info(
-		"executableReporterStub.ReportExecutable called: %s (buildID: %s. fileId %s, name: %s) path: %s",
+
+	//
+	log.Infof(
+		"executableReporterStub.ReportExecutable called: (buildID: %s. fileId %s, name: %s) mapping path: %s, debuglink: %s",
 		args.MappingFile.Value().GnuBuildID,
 		args.MappingFile.Value().FileID,
-		args.Process,
+		args.MappingFile.Value().FileName,
+		args.Mapping.Path,
 		args.DebuglinkFileName,
 	)
+	args.Process.GetMappings()
 }
 
 var _ reporter.ExecutableReporter = executableReporterStub{}
