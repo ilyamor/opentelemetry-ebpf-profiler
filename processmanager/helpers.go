@@ -108,11 +108,14 @@ func (er executableReporterStub) ReportExecutable(args *reporter.ExecutableMetad
 		args.Mapping.Path,
 		args.DebuglinkFileName,
 	)
-	args.Process.GetMappings()
 
 	// Upload symbols to Coralogix
 	if args.Mapping.Path != libpf.NullString {
-		if err := uploadSymbols(args.Mapping.Path.String()); err != nil {
+		file, err := args.Process.ExtractAsFile(args.Mapping.Path.String())
+		if err != nil {
+			log.Errorf("Failed to extract executable file %s: %v", args.Mapping.Path, err)
+		}
+		if err := uploadSymbols(file); err != nil {
 			log.Errorf("Failed to upload symbols for mapping %s: %v", args.Mapping.Path, err)
 		}
 	}
